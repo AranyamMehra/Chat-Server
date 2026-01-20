@@ -15,4 +15,13 @@ object ServerState {
     def allUsers: List[String] = clients.keys.toList
 
     def broadcast(msg: String): Unit = clients.values.foreach(_.println(msg))
+
+    def broadcastExcept(msg: String, exceptUsername: String): Unit = {
+        clients.foreach { case (username, out) =>
+            if (username != exceptUsername) {
+                out.println(msg)
+            }
+        }
+    }
+
 }

@@ -1,15 +1,28 @@
 package Client
-import Client.ClientUtilities._
+import Utility.Utilities.{connect, reader, writer}
 
 import java.net.Socket
 import java.io.{BufferedReader, PrintWriter}
 
 class ClientConnection(host: String, port: Int) {
-    val socket: Socket = new Socket(host, port)
+    val socket: Socket = connect (host, port)
     val in: BufferedReader = reader(socket)
     val out: PrintWriter = writer(socket)
 
     def close(): Unit = {
-        socket.close()
+        try {
+            if (out != null) {
+                out.close()
+            }
+            if (in != null) {
+                in.close()
+            }
+            if (socket != null && !socket.isClosed) {
+                socket.close()
+            }
+            println("[CONNECTION] Closed successfully")
+        } catch {
+            case e: Exception => println(s"[CONNECTION] Error during close: ${e.getMessage}")
+        }
     }
 }
