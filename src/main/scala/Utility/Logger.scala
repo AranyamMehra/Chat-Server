@@ -5,7 +5,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 class Logger(name: String) {
-    // Create logs directory if it doesn't exist
     private val logsDir = new File("logs")
     if (!logsDir.exists()) {
         logsDir.mkdir()
