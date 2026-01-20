@@ -26,7 +26,7 @@ class Logger(name: String) {
 
         this.synchronized {
             writer.println(logMessage)
-            writer.flush() // Ensure it's written immediately
+            writer.flush()
         }
     }
 
@@ -35,7 +35,6 @@ class Logger(name: String) {
     def error(message: String): Unit = log("ERROR", message)
     def debug(message: String): Unit = log("DEBUG", message)
 
-    // Close the logger (call when shutting down)
     def close(): Unit = {
         if (writer != null) {
             writer.close()
