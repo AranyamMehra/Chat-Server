@@ -3,7 +3,6 @@ import Utility.Logger
 
 import java.lang.Runtime.getRuntime
 import java.net.{ServerSocket, Socket}
-import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Future, blocking}
 import scala.util.{Failure, Success, Try}

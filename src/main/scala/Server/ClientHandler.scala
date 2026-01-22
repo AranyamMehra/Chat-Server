@@ -7,7 +7,6 @@ import ServerState._
 
 import java.io.{BufferedReader, PrintWriter}
 import java.net.Socket
-import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
@@ -25,10 +24,9 @@ class ClientHandler {
         resources match {
             case Success((in, out)) => handleClientResources(in, out, socket)
 
-            case Failure (e) => {
+            case Failure (e) =>
                 logger.error(s"Failed to create resources: ${e.getMessage}")
                 closeSocket(socket)
-            }
         }
     }
 
@@ -129,26 +127,11 @@ class ClientHandler {
 
     private def cleanup(in: BufferedReader, out: PrintWriter, socket: Socket): Unit = {
         val user = username.getOrElse("unknown")
-        val closeResults = List(
-            ("input stream", Try(if (in != null) in.close())),
-            ("output stream", Try(if (out != null) out.close())),
-            ("socket", Try(closeSocket(socket)))
-        )
-
-        closeResults.foreach {
-            case (resourceName, Success(_)) =>
-                logger.debug(s"Closed $resourceName for $user")
-
-            case (resourceName, Failure(e)) =>
-                logger.error(s"Error closing $resourceName for $user: ${e.getMessage}")
-        }
-
+        List (in, out, socket).foreach(res => Try (res.close()))
         logger.debug(s"Resources cleaned up for $user")
     }
 
     private def closeSocket(socket: Socket): Unit = {
-        if (socket != null && !socket.isClosed) {
-            socket.close()
-        }
+        Try(socket.close())
     }
 }

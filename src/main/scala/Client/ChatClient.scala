@@ -1,80 +1,70 @@
 package Client
 import Utility.Logger
+
 import java.lang.Runtime.getRuntime
 import java.util.Scanner
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
+import scala.util.{Failure, Success, Try}
 
 object ChatClient {
-    @volatile private var globalConnection: ClientConnection = _
-    @volatile private var globalListener: ClientListener = _
+    @volatile private var globalConnection: Option[ClientConnection] = None
+    @volatile private var globalListener: Option[ClientListener] = None
     private val logger = Logger("ChatClient")
 
     def main(args: Array[String]): Unit = {
+        val clientSession: Future[Unit] = for {
+            username <- Future (askUsername())
+            connection <- Future(new ClientConnection("localhost", 9090))
 
-        getRuntime.addShutdownHook(new Thread(() => {
-            logger.warn("Shutdown hook triggered - cleaning up resources...")
+            _ <- Future.successful {
+                setupShutdownHook(connection)
+                logger.info(s"Connected as $username")
+            }
+
+            listener = new ClientListener(connection, username)
+            sender = new ClientSender(connection, username)
+
+            _ = logger.info(s"Connected as $username")
+
+            _ <- Future.firstCompletedOf(Seq(
+                listener.listen(),
+                sender.send()
+            ))
+        } yield connection
+
+        clientSession.onComplete {
+            case Success(_) =>
+                logger.info("Client shutdown complete")
+                logger.close()
+                println("[CLIENT] Goodbye!")
+
+            case Failure(e: java.net.ConnectException) =>
+                logger.error(s"Cannot connect to server: ${e.getMessage}")
+                println(s"[CLIENT] Cannot connect to server: ${e.getMessage}")
+
+            case Failure(e) =>
+                logger.error(s"Client error: ${e.getMessage}")
+                e.printStackTrace()
+        }
+
+        Try (Await.result (clientSession, Duration.Inf))
+    }
+
+    private def setupShutdownHook(conn: ClientConnection): Unit = {
+        sys.addShutdownHook {
             println("\n[SHUTDOWN HOOK] Cleaning up resources...")
-
-            if (globalListener != null) {
-                globalListener.stop()
-            }
-
-            if (globalConnection != null) {
-                globalConnection.close()
-            }
-            logger.info("Cleanup complete")
+            conn.close()
             logger.close()
-            println("[SHUTDOWN HOOK] Cleanup complete")
-        }))
+        }
+    }
 
+    private def askUsername() = {
         val sc = new Scanner(System.in)
         println("Enter your username: ")
         val username = sc.nextLine()
         logger.info(s"Starting client for user: $username")
-
-        var connection: ClientConnection = null
-        var listener: ClientListener = null
-        var sender: ClientSender = null
-
-        try {
-            connection = new ClientConnection("localhost", 9090)
-            globalConnection = connection
-            logger.info("Connected to server successfully")
-
-            listener = new ClientListener(connection, username)
-            globalListener = listener
-
-            sender = new ClientSender(connection, username)
-
-            listener.listen()
-            sender.send()
-
-            println("[CLIENT] Shutting down...")
-            logger.info("User initiated shutdown")
-            Thread.sleep(500)
-
-        } catch {
-            case e: java.net.ConnectException =>
-                logger.error(s"Cannot connect to server: ${e.getMessage}")
-                println(s"[CLIENT] Cannot connect to server: ${e.getMessage}")
-
-            case e: Exception =>
-                logger.error(s"Client error: ${e.getMessage}")
-                println(s"[CLIENT] Error: ${e.getMessage}")
-                e.printStackTrace()
-        }
-        finally {
-            if (listener != null) {
-                listener.stop()
-            }
-            if (connection != null) {
-                connection.close()
-            }
-            globalConnection = null
-            globalListener = null
-
-            logger.info("Client shutdown complete")
-            logger.close()
-            println("[CLIENT] Goodbye!")
-        }
+        username
     }
 }
