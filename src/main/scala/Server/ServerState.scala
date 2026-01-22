@@ -13,9 +13,16 @@ object ServerState {
         logger.info(s"User '$username' added. Total users: ${clients.size}")
     }
 
-    def removeUser(username: String): Unit = {
-        logger.info(s"User '$username' removed. Total users: ${clients.size}")
-        clients.remove(username)
+    def removeUser(username: String): Option [PrintWriter] = {
+        val remove = clients.remove(username)
+
+        remove match {
+            case Some (x) => logger.info(s"User '$username' removed. Total users: ${clients.size}")
+                Some (x)
+            case None =>
+                logger.warn(s"Attempted to remove non-existent user '$username'")
+                None
+        }
     }
 
     def getUser(username: String): Option[PrintWriter] = clients.get(username)
@@ -27,12 +34,12 @@ object ServerState {
         clients.values.foreach(_.println(msg))
     }
 
-    def broadcastExcept(msg: String, exceptUsername: String): Unit = {
-        val count = clients.count(_._1 != exceptUsername)
-        logger.debug(s"Broadcasting to $count users (except $exceptUsername)")
+    def broadcastExcept(msg: String, other: String): Unit = {
+        val count = clients.count(_._1 != other)
+        logger.debug(s"Broadcasting to $count users (except $other)")
 
         clients.foreach { case (username, out) =>
-            if (username != exceptUsername) {
+            if (username != other) {
                 out.println(msg)
             }
         }

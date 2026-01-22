@@ -21,6 +21,7 @@ class Logger(name: String) {
         val timestamp = LocalDateTime.now().format(dateFormat)
         val logMessage = s"[$timestamp] [$level] [$name] $message"
 
+        if (!level.equals ("DEBUG"))
         println(logMessage)
 
         this.synchronized {

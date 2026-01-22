@@ -3,36 +3,43 @@ import Utility.Logger
 
 import java.lang.Runtime.getRuntime
 import java.net.{ServerSocket, Socket}
+import scala.annotation.tailrec
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, blocking}
+import scala.util.{Failure, Success, Try}
 
 object ChatServer {
     private val logger = Logger("ChatServer")
 
-    private def startServer(serverSocket: ServerSocket) = {
-        try {
-            logger.info("Server started, waiting for connections...")
+    private def startServer(serverSocket: ServerSocket): Try [Unit] = Try {
+        logger.info("Server started, waiting for connections...")
 
-            while (true) {
-                val sc: Socket = serverSocket.accept()
-                println("A new Client is connected.")
-                logger.info(s"New client connected")
-
-                val client: ClientHandler = new ClientHandler
-
-                val thread = new Thread(() => {
-                    client.handleClient(sc)
-                })
-
-                thread.start()
+        def connection(): Unit = {
+            val sc = Future{
+                blocking {
+                    serverSocket.accept()
+                }
             }
-        } catch {
-            case e: Exception => e.printStackTrace()
-                logger.error(s"Server error: ${e.getMessage}")
 
+            sc.onComplete {
+                case Success(clientSocket) =>
+                    handleNewClient(clientSocket)
+                    connection()
+
+                case Failure(e) =>
+                    logger.error(s"Error accepting client: ${e.getMessage}")
+            }
         }
-        finally {
-            serverSocket.close()
-            logger.info("Server socket closed")
-            logger.close()
+        connection()
+    }
+
+    private def handleNewClient(clientSocket: Socket): Unit = {
+        Future {
+            val client = new ClientHandler
+            client.handleClient (clientSocket)
+        }.onComplete {
+            case Success(_) => logger.info(s"New client connected")
+            case Failure (e) => logger.error(s"Server error: ${e.getMessage}")
         }
     }
 
@@ -47,6 +54,16 @@ object ChatServer {
             logger.info("Server shutting down...")
             logger.close()
         }))
-        startServer (serverSocket)
+        startServer (serverSocket) match {
+            case Success(_) =>
+                serverSocket.close()
+                logger.info("Server socket closed")
+                logger.close()
+                logger.info("Server shutdown gracefully")
+
+            case Failure(exception) =>
+                logger.error(s"Server failed: ${exception.getMessage}")
+                exception.printStackTrace()
+        }
     }
 }

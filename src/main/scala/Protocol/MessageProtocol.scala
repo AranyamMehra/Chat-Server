@@ -37,7 +37,6 @@ object MessageProtocol {
                     Some(UserListMessage(parts(1).split(",").toList))
                 }
 
-
             case "BROADCAST_DELIVERED" if parts.length >= 3 => Some(BroadcastDelivered(parts(1), parts(2)))
             case "PRIVATE_DELIVERED" if parts.length >= 4 => Some(PrivateDelivered(parts(1), parts(2), parts(3)))
             case "USER_JOINED" if parts.length >= 2 => Some(UserJoined(parts(1)))
