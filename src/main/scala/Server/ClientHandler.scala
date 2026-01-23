@@ -35,29 +35,28 @@ class ClientHandler {
             val message = Future(in.readLine())
 
             message.flatMap {
-                case null => // Client disconnected
+                case null =>
                     logger.warn(s"Client ${username.getOrElse("unknown")} disconnected")
-                    disconnect()
-                Future.successful(())
+                    println (s"Client ${username.getOrElse("unknown")} disconnected")
+                    Future.successful(())
 
-                case rawMessage => // client still running
+                case rawMessage =>
                     val running = processMessage(rawMessage, out)
                     if (running)
                         loop()
                     else {
-                        disconnect()
                         Future.successful(())
                     }
 
-            }.recover {
+            }.recoverWith {
                 case e: Exception =>
                     logger.error(s"Error reading from ${username.getOrElse("unknown")}: ${e.getMessage}")
-                    disconnect()
+                    Future.successful(())
             }
         }
-        loop().transformWith {result =>
+        loop().onComplete {_ =>
+            disconnect()
             cleanup(in, out, socket)
-            Future.fromTry (result)
         }
     }
 
@@ -90,9 +89,11 @@ class ClientHandler {
                 getUser(to) match {
                     case Some(targetOut) => targetOut.println(ecnode(PrivateDelivered(from, to, text)))
                         out.println(ecnode(WelcomeMessage(true, s"Message sent to $to")))
+                    println (s"Message sent to $to")
 
                     case None =>
                         logger.warn(s"User $to not found for private message from $from")
+                        println (s"User $to not found for private message from $from")
                         out.println(ecnode(WelcomeMessage(false, s"User $to not found")))
                 }
                 true
@@ -100,7 +101,7 @@ class ClientHandler {
             // DISCONNECT
             case Some(DisconnectMessage()) =>
                 logger.info(s"User ${username.getOrElse("unknown")} requested disconnect")
-                disconnect()
+                println(s"User ${username.getOrElse("unknown")} requested disconnect")
                 false
 
             // INVALID
@@ -129,9 +130,10 @@ class ClientHandler {
         val user = username.getOrElse("unknown")
         List (in, out, socket).foreach(res => Try (res.close()))
         logger.debug(s"Resources cleaned up for $user")
+        println(s"Resources cleaned up for $user")
     }
 
     private def closeSocket(socket: Socket): Unit = {
-        Try(socket.close())
+        Try(if (socket != null && !socket.isClosed) socket.close())
     }
 }

@@ -16,7 +16,8 @@ object MessageProtocol {
             if (users.isEmpty) "USERLIST|"
             else s"USERLIST|${users.mkString(",")}"
         case UserJoined(username: String) => s"USER_JOINED|$username"
-        case UserLeft(username: String) => s"USER_LEFT|$username"
+        case UserLeft(username:String) => s"USER_LEFT|$username"
+        case ServerShutdown() => "SERVER_SHUTDOWN"
     }
 
     def decode(str: String): Option[Message] = {
@@ -40,7 +41,8 @@ object MessageProtocol {
             case "BROADCAST_DELIVERED" if parts.length >= 3 => Some(BroadcastDelivered(parts(1), parts(2)))
             case "PRIVATE_DELIVERED" if parts.length >= 4 => Some(PrivateDelivered(parts(1), parts(2), parts(3)))
             case "USER_JOINED" if parts.length >= 2 => Some(UserJoined(parts(1)))
-            case "USER_LEFT" if parts.length >= 3 => Some(UserLeft(parts(1)))
+            case "USER_LEFT" if parts.length >= 2 => Some(UserLeft(parts(1)))
+            case "SERVER_SHUTDOWN" => Some(ServerShutdown())
             case _ => None
 
         }

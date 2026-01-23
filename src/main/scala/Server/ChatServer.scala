@@ -4,14 +4,17 @@ import Utility.Logger
 import java.lang.Runtime.getRuntime
 import java.net.{ServerSocket, Socket}
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Future, blocking}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future, blocking, Promise}
 import scala.util.{Failure, Success, Try}
 
 object ChatServer {
     private val logger = Logger("ChatServer")
+    val keepAlive = Promise[Unit]()
 
     private def startServer(serverSocket: ServerSocket): Try [Unit] = Try {
         logger.info("Server started, waiting for connections...")
+        println("Server started, waiting for connections...")
 
         def connection(): Unit = {
             val sc = Future{
@@ -24,7 +27,6 @@ object ChatServer {
                 case Success(clientSocket) =>
                     handleNewClient(clientSocket)
                     connection()
-
                 case Failure(e) =>
                     logger.error(s"Error accepting client: ${e.getMessage}")
             }
@@ -38,6 +40,7 @@ object ChatServer {
             client.handleClient (clientSocket)
         }.onComplete {
             case Success(_) => logger.info(s"New client connected")
+                            println ("New Client connected")
             case Failure (e) => logger.error(s"Server error: ${e.getMessage}")
         }
     }
@@ -50,19 +53,25 @@ object ChatServer {
         println(s"ChatServer started on port $port")
 
         getRuntime.addShutdownHook(new Thread(() => {
-            logger.info("Server shutting down...")
+            logger.info("Server shutting down - notifying clients...")
+            ServerState.broadcastServerShutdown()
+            Try(serverSocket.close())
+            logger.info("Server shutdown complete")
             logger.close()
+
         }))
+
         startServer (serverSocket) match {
             case Success(_) =>
-                serverSocket.close()
-                logger.info("Server socket closed")
-                logger.close()
-                logger.info("Server shutdown gracefully")
+                Await.result(keepAlive.future, Duration.Inf)
 
-            case Failure(exception) =>
-                logger.error(s"Server failed: ${exception.getMessage}")
-                exception.printStackTrace()
+            case Failure(e) =>
+                logger.error(s"Server failed: ${e.getMessage}")
+                e.printStackTrace()
         }
+        Try(serverSocket.close())
+        logger.info("Server shutdown complete")
+        println ("Server shutdown !!!!!")
+        logger.close()
     }
 }

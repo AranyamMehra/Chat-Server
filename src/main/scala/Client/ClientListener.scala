@@ -16,7 +16,7 @@ class ClientListener (connection: ClientConnection, username: String) {
         logger.info("Starting message listener thread")
         def loop(): Future[Unit] = {
             if (! running) {
-                logger.info("[LISTENER] Stop signal received, exiting loop.")
+                logger.info("Stop signal received, exiting loop.")
                 Future.successful(())
             }
             else {
@@ -24,13 +24,29 @@ class ClientListener (connection: ClientConnection, username: String) {
                 raw.flatMap {
                     case null =>
                         logger.warn("[SYSTEM] Disconnected from server")
+                        println ("[SYSTEM ERROR] Disconnected from server / SERVER DIED (RIP!!)")
                         Future.successful(())
 
                     case raw => logger.debug(s"Received: $raw")
                         handle(raw)
                         loop()
-                }.recover {
-                    case e: Exception => logger.error(s"[ERROR] Listener error: ${e.getMessage}")
+                }.recoverWith {
+                    case e: SocketException if !running =>
+                        logger.info("Socket closed (expected during shutdown)")
+                        Future.successful(())
+
+                    case e: SocketException =>
+                        logger.error(s"Connection error: ${e.getMessage}")
+                        println("[ERROR] Lost connection to server")
+                        Future.successful(())
+
+                    case e: Exception if running =>
+                        logger.error(s"Listener error: ${e.getMessage}")
+                        println(s"\n[ERROR] Unexpected error: ${e.getMessage}")
+                        Future.successful(())
+
+                    case _ =>
+                        Future.successful(())
                 }
             }
         }
@@ -45,26 +61,28 @@ class ClientListener (connection: ClientConnection, username: String) {
     private def handle(raw: String): Unit = {
         decode(raw) match {
             case Some(BroadcastDelivered(from, text)) =>
-                logger.info(s"[BROADCAST FROM $from]: $text")
+                logger.info(s"Broadcast from $from: $text")
+                println(s"[$from to ALL] $text")
+
 
             case Some(PrivateDelivered(from, to, text)) =>
-                logger.info(s"[Private from $from to $to]: $text")
+                logger.info(s"[Private from $from]: $text")
+                println(s"[$from to YOU] $text")
 
             case Some(UserListMessage(users)) =>
                 logger.info(s"Received user list: ${users.size} users")
                 if (users.nonEmpty) {
-                    println("[ONLINE USERS]")
-                    users.foreach(u => println(s"  - $u"))
-                }
-                else {
-                    println("[ONLINE USERS] No other users online")
+                    println(s"[ONLINE] ${users.mkString(", ")}")
                 }
 
             case Some(UserJoined(user)) =>
                 logger.info(s"User $user joined")
+                println(s"$user joined the CHAT")
+
 
             case Some(UserLeft(user)) =>
                 logger.info(s"User $user left")
+                println(s"[-] $user GONE AWOL")
 
             case Some(WelcomeMessage(success, msg)) =>
                 if (success) {
@@ -72,7 +90,13 @@ class ClientListener (connection: ClientConnection, username: String) {
                 }
                 else {
                     logger.warn(s"Server error: $msg")
+                    println(s"[ERROR] $msg")
                 }
+
+            case Some(ServerShutdown()) =>
+                logger.warn("Server is shutting down")
+                println("[SERVER] Server is shutting down. You will no longer be able to message.")
+                running = false
 
             case None =>
                 logger.error(s"Could not decode: $raw")

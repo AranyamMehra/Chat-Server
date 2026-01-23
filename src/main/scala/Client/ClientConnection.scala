@@ -12,8 +12,10 @@ class ClientConnection(host: String, port: Int) {
     val out: PrintWriter = writer(socket)
     private val logger = Logger("ClientConnection")
 
+    logger.info(s"Connected to $host:$port")
+
     def close(): Unit = {
         List (in, out, socket).foreach(res => Try (res.close()))
-        logger.info (s"Resources cleaned up")
+        logger.info (s"Connection closed and Resources cleaned up")
     }
 }

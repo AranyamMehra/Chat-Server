@@ -1,10 +1,9 @@
 package Utility
-
 import java.io.{File, FileWriter, PrintWriter}
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-class Logger(name: String) {
+class Logger(name: String, printToConsole: Boolean = false) {
     private val logsDir = new File("logs")
     if (!logsDir.exists()) {
         logsDir.mkdir()
@@ -14,15 +13,16 @@ class Logger(name: String) {
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
     private lazy val writer: PrintWriter = {
-        new PrintWriter(new FileWriter(logFile, true))
+        new PrintWriter(new FileWriter(logFile, false))
     }
 
     private def log(level: String, message: String): Unit = {
         val timestamp = LocalDateTime.now().format(dateFormat)
         val logMessage = s"[$timestamp] [$level] [$name] $message"
 
-        if (!level.equals ("DEBUG"))
-        println(logMessage)
+        if (printToConsole && !level.equals("DEBUG")) {
+            println(logMessage)
+        }
 
         this.synchronized {
             writer.println(logMessage)
@@ -43,5 +43,6 @@ class Logger(name: String) {
 }
 
 object Logger {
-    def apply(name: String): Logger = new Logger(name)
+    def apply(name: String): Logger = new Logger(name, false)
+    def console (name: String): Logger = new Logger (name, true)
 }

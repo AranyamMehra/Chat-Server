@@ -1,8 +1,12 @@
 package Server
+import Protocol.{MessageProtocol, ServerShutdown}
+import Protocol.MessageProtocol.ecnode
 import Utility.Logger
+
 import java.io.PrintWriter
 import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
 object ServerState {
     private val logger = Logger("ServerState")
@@ -13,12 +17,12 @@ object ServerState {
         logger.info(s"User '$username' added. Total users: ${clients.size}")
     }
 
-    def removeUser(username: String): Option [PrintWriter] = {
+    def removeUser(username: String): Option[PrintWriter] = {
         val remove = clients.remove(username)
 
         remove match {
-            case Some (x) => logger.info(s"User '$username' removed. Total users: ${clients.size}")
-                Some (x)
+            case Some(x) => logger.info(s"User '$username' removed. Total users: ${clients.size}")
+                Some(x)
             case None =>
                 logger.warn(s"Attempted to remove non-existent user '$username'")
                 None
@@ -45,4 +49,15 @@ object ServerState {
         }
     }
 
+    def broadcastServerShutdown(): Unit = {
+        logger.info(s"Broadcasting server shutdown to ${clients.size} clients")
+        val shutdownMsg = ecnode(ServerShutdown())
+
+        clients.values.foreach { out =>
+            Try {
+                out.println(shutdownMsg)
+                out.flush()
+            }
+        }
+    }
 }

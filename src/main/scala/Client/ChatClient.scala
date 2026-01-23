@@ -5,7 +5,8 @@ import java.lang.Runtime.getRuntime
 import java.util.Scanner
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt}
+import scala.sys.addShutdownHook
 import scala.util.{Failure, Success, Try}
 
 object ChatClient {
@@ -13,20 +14,38 @@ object ChatClient {
     @volatile private var globalListener: Option[ClientListener] = None
     private val logger = Logger("ChatClient")
 
-    private def setupShutdownHook(): Unit = {
+    private def addShutdownHook(): Unit = {
         sys.addShutdownHook {
-            globalListener.foreach(_.stop())
-            globalConnection.foreach(_.close())
+            val c = performShutdownCleanup()
+
+            Try(Await.ready(c, 1.seconds)) match {
+                case Success(_) =>
+                    logger.info("Shutdown hook cleanup successful")
+                    println ("Shutdown hook cleanup successful")
+                case Failure(e) =>
+                    logger.error(s"Shutdown hook cleanup failed: ${e.getMessage}")
+            }
             logger.close()
         }
     }
 
-    private def askUsername() = {
-        val sc = new Scanner(System.in)
-        println("Enter your username: ")
-        val username = sc.nextLine()
-        logger.info(s"Starting client for user: $username")
-        username
+    private def performShutdownCleanup(): Future[Unit] = {
+        logger.warn("Shutdown hook triggered - cleaning up resources...")
+
+        for {
+            _ <- Future {
+                globalListener.foreach(_.stop())
+                logger.debug("Listener stopped")
+            }
+
+            _ <- Future {
+                globalConnection.foreach(_.close())
+                logger.debug("Connection closed")
+            }
+
+        } yield {
+            println("[SHUTDOWN] Complete")
+        }
     }
 
     private def createConnection(): Future[ClientConnection] = Future {
@@ -46,10 +65,20 @@ object ChatClient {
 
     private def startSender(connection: ClientConnection, username: String): Future[Unit] = {
         val sender = new ClientSender(connection, username)
-        sender.send()
+
+        sender.send().andThen {
+            case Success(_) =>
+                logger.info("User initiated shutdown")
+                println("Shutting down...")
+
+            case Failure(e) =>
+                logger.error(s"Sender error: ${e.getMessage}")
+        }
+
     }
 
     private def cleanup(connection: ClientConnection, listener: ClientListener): Future[Unit] = Future {
+        Thread.sleep(500)
         logger.info("Cleaning up resources...")
         listener.stop()
         connection.close()
@@ -70,23 +99,31 @@ object ChatClient {
         clientSession.recover {
             case e: java.net.ConnectException =>
                 logger.error(s"Cannot connect to server: ${e.getMessage}")
-                println(s"[CLIENT] Cannot connect to server: ${e.getMessage}")
+                println(s"Cannot connect to server: ${e.getMessage}")
 
             case e: Exception =>
                 logger.error(s"Client error: ${e.getMessage}")
-                println(s"[CLIENT] Error: ${e.getMessage}")
+                println(s"Error: ${e.getMessage}")
                 e.printStackTrace()
         }
     }
 
     def main(args: Array[String]): Unit = {
-        setupShutdownHook()
-        val username =  askUsername()
+        addShutdownHook()
+
+        // Get username
+        print("Enter your username: ")
+        val sc = new Scanner(System.in)
+        val username = sc.nextLine()
+        println(s"\nWelcome, $username!")
+        println("Type /help for available commands\n")
         logger.info(s"Starting client for user: $username")
-        val clientFuture = runClient(username)
-        Await.ready(clientFuture, Duration.Inf)
+
+        val client = runClient(username)
+        Await.ready(client, Duration.Inf)
+
         logger.info("Client shutdown complete")
         logger.close()
-        println("[CLIENT] Goodbye!")
+        println("Goodbye!")
     }
 }

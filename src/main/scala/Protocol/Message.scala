@@ -13,3 +13,4 @@ case class WelcomeMessage(success: Boolean, message: String) extends Message
 case class UserListMessage(users: List[String]) extends Message
 case class UserJoined(username: String) extends Message
 case class UserLeft(username: String) extends Message
+case class ServerShutdown() extends Message
